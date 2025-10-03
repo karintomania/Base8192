@@ -6,8 +6,6 @@ import {
     decode,
 } from './base4096.js';
 
-const textDecoder = new TextDecoder();
-
 //---------------
 // test utilities
 //---------------
