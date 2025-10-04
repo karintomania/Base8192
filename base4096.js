@@ -1,12 +1,14 @@
 const textEncoder = new TextEncoder();
 
 // "一":U+4E00
-const baseCodePoint = 0x4E00;
+const baseCodePointFirst = 0x4E00;
+// "帀":U+5E00
+const baseCodePointSecond = 0x5E00;
 
 // use 等:U+7B49 for padding.
 // 等 means equal, btw.
 const padding = 0x7B49;
-const padding12Bits = padding - baseCodePoint;
+const padding12Bits = padding - baseCodePointFirst;
 const paddingString = "等";
 
 /**
@@ -16,7 +18,15 @@ const paddingString = "等";
 export function encode(binary) {
     const twelveBitArray = bytesTo12Bits(binary);
 
-    const result = twelveBitArray.map(twelveBitsToBase4096).join("");
+    const result = twelveBitArray.map((twelveBit, i) => {
+        console.log(i.toString(16), twelveBit.toString(16));
+
+        if (twelveBit === padding12Bits) {
+            return paddingString;
+        }
+
+        return twelveBitsToBase4096(twelveBit, (i % 2) === 0);
+    }).join("");
 
     return result;
 }
@@ -78,12 +88,21 @@ export function bytesTo12Bits(bytes) {
     return result;
 }
 
-export function twelveBitsToBase4096(binary) {
+/**
+ * @param {number} binary - 12 bits binary
+ * @param {bool} isFirst
+ */
+export function twelveBitsToBase4096(binary, isFirst) {
+    const baseCodePoint = isFirst ? baseCodePointFirst : baseCodePointSecond;
+
     const codePoint = baseCodePoint + binary;
+
     return String.fromCodePoint(codePoint);
 }
 
 function charToCode12Bits(char) {
+    const isFirst = true;
+    const baseCodePoint = isFirst ? baseCodePointFirst : baseCodePointSecond;
     const codePoint = char.codePointAt(0);
     return codePoint - baseCodePoint;
 }
