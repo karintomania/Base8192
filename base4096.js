@@ -1,123 +1,239 @@
 const textEncoder = new TextEncoder();
 
 // "一":U+4E00
-const baseCodePoint = 0x4E00;
+const baseCodePointLeft = 0x4E00;
+// "帀":U+5E00
+const baseCodePointRight = 0x5E00;
 
 // use 等:U+7B49 for padding.
 // 等 means equal, btw.
-const padding = 0x7B49;
-const padding12Bits = padding - baseCodePoint;
+const padding12Bits = 0x7B49;
 const paddingString = "等";
+
+export const TwelveBitsType = Object.freeze({
+    LEFT: 0,
+    RIGHT: 1,
+    PADDING: 2,
+});
+
+/**
+ * @param {string} str
+ * @return {Uint8Array}
+ */
+export function stringToUint8Array(str) {
+    const utf8Array = new Uint8Array(str.length * 3);
+    const result = textEncoder.encodeInto(str, utf8Array);
+    return utf8Array.slice(0, result.written);
+}
+
+/**
+ * @property {number} bits - 12 bits representation
+ * @property {number} type - Use TwelveBitsType
+ */
+export class TwelveBits {
+    constructor(bits, type) {
+        if (type === TwelveBitsType.PADDING) {
+            if (bits !== padding12Bits) {
+                throw "For padding, the bits should be 0x" + padding12Bits.toString(16);
+            }
+        }else {
+            if (bits < 0 || bits > (0xFFF)) {
+                throw `Bits must be unsigned 12 bits integer. 0x${bits.toString(16)} given.`;
+            }
+        }
+
+        this.bits = bits;
+        this.type = type;
+    }
+
+    static fromString(str, type) {
+        if (type === TwelveBitsType.PADDING) {
+            if (str !== paddingString) {
+                throw `Padding string needs to be ${paddingString}`;
+            }
+
+            return new TwelveBits(padding12Bits, type);
+        }
+
+        const codePoint = str.codePointAt(0);
+
+        const baseCodePoint = (type === TwelveBitsType.LEFT)
+            ? baseCodePointLeft
+            : baseCodePointRight;
+
+        if (codePoint < baseCodePoint || baseCodePoint + 0xFFF < codePoint) {
+            const typeStr = (type === TwelveBitsType.LEFT) ? 'left' : 'right';
+            throw `${str} is not a valid ${typeStr} twelve bit letter.`
+        }
+
+        const bits =  codePoint - baseCodePoint;
+
+        return new TwelveBits(bits, type);
+    }
+
+    toString() {
+        if (this.type === TwelveBitsType.PADDING) {
+            return paddingString;
+        }
+
+        const baseCodePoint = (this.type === TwelveBitsType.LEFT)
+                ? baseCodePointLeft 
+                : baseCodePointRight;
+
+        const codePoint = baseCodePoint + this.bits;
+
+        return String.fromCodePoint(codePoint);
+    }
+};
+
+export class TwelveBitsPair {
+    constructor(left, right, padding) {
+        this.left = left;
+        this.right = right;
+        this.padding = padding;
+    }
+
+    /**
+     * @param {string} str - expects 2 letters of base4096 string
+     */
+    static fromString(str) {
+        if (!(str.length === 2 || str.length === 3)) {
+            throw "Expecting 2 or 3 base4096 letters.";
+        }
+
+        const left = TwelveBits.fromString(str[0], TwelveBitsType.LEFT);
+
+        let right = null;
+        let padding = null;
+
+        if (str[1] === paddingString) {
+            padding = TwelveBits.fromString(str[1], TwelveBitsType.PADDING);
+        } else {
+            right = TwelveBits.fromString(str[1], TwelveBitsType.RIGHT);
+        }
+
+        if (str.length === 3) {
+            padding = TwelveBits.fromString(str[2], TwelveBitsType.PADDING);
+        }
+
+        return new TwelveBitsPair(left, right, padding);
+    }
+
+    toString() {
+        const left = this.left.toString();
+
+        const right = (this.right) ? this.right.toString() : "";
+
+        const padding = (this.padding) ? this.padding.toString() : "";
+
+        return left + right + padding;
+    }
+
+    static fromBytes(bytes) {
+        if (bytes.length < 1 || 3 < bytes.length) {
+            throw "Expecting 1 to 3 uint8 in array.";
+        }
+
+        let left, right, padding = null;
+
+        // create left
+        const leftBits = (bytes.length === 1) 
+            ? bytes[0] << 4
+            : bytes[0] << 4 | ((bytes[1] & 0b1111_0000) >> 4);
+
+        left = new TwelveBits(leftBits, TwelveBitsType.LEFT);
+
+        // create right
+        if (bytes.length === 2) {
+            const rightBits = (bytes[1] & 0b0000_1111) << 8;
+            right = new TwelveBits(rightBits, TwelveBitsType.RIGHT);
+        } else if (bytes.length === 3) {
+            const rightBits = (bytes[1] & 0b0000_1111) << 8 | bytes[2];
+            right = new TwelveBits(rightBits, TwelveBitsType.RIGHT);
+        }
+
+        // create padding
+        if (bytes.length === 1 || bytes.length === 2) {
+            padding = new TwelveBits(padding12Bits, TwelveBitsType.PADDING);
+        }
+
+        return new TwelveBitsPair(left, right, padding);
+    }
+
+    toBytes() {
+        const result = Array();
+
+        const firstByte = this.left.bits >> 4;
+
+        // left + right pair
+        if (this.left && this.right && !this.padding) {
+            const secondByte = (this.left.bits & 0b0000_0000_1111) << 4 | (this.right.bits >> 8);
+            const thirdByte = this.right.bits & 0b0000_1111_1111;
+
+            result.push(firstByte, secondByte, thirdByte);
+        }
+
+        // left + padding pair
+        if (this.left && !this.right && this.padding) {
+            // contains only first bytes
+            result.push(firstByte);
+        }
+
+        // left + right + padding pair
+        if (this.left && this.right && this.padding) {
+            // contains only 2 bytes
+            const secondByte = (this.left.bits & 0b0000_0000_1111) << 4 | (this.right.bits >> 8);
+
+            result.push(firstByte, secondByte);
+        }
+
+        return result;
+    }
+};
 
 /**
  * @param {number[]} binary - array of u8 integer
  * @returns {string}
  */
 export function encode(binary) {
-    const twelveBitArray = bytesTo12Bits(binary);
+    const count3BytesPairs = Math.floor(binary.length/3);
+    const remainder = binary.length % 3;
 
-    const result = twelveBitArray.map(twelveBitsToBase4096).join("");
+    const twelveBitsPairs = Array();
+    let i = 0
 
-    return result;
-}
+    for (; i < count3BytesPairs; i++ ) {
+        const pair = TwelveBitsPair.fromBytes(
+            binary.slice(i*3, i*3+3)
+        );
 
-export function stringToUtf8BytesArray(str) {
-    const utf8Array = new Uint8Array(str.length * 3);
-    const result = textEncoder.encodeInto(str, utf8Array);
-    return utf8Array.slice(0, result.written);
-}
-
-function convert3BytesTo12Bits(pair) {
-    const result  = Array();
-
-    const first12Bits = (pair[0] << 4) | (pair[1] >> 4);
-
-    const second12Bits = ((pair[1] & 0b00001111) << 8) | pair[2]
-
-    result.push(first12Bits, second12Bits);
-
-    return result;
-}
-
-function convert2BytesTo12Bits(firstByte, secondByte) {
-    const first12Bits  = (firstByte << 4) | (secondByte >> 4);
-    const second12Bits  = ((secondByte & 0b00001111) << 8);
-
-    // add padding to flag the final bits doesn't exist for decoding
-    return Array(first12Bits, second12Bits, padding12Bits);
-}
-
-function convertByteTo12Bits(byte) {
-    const first12Bits = byte << 4;
-    return Array(first12Bits, padding12Bits);
-}
-
-export function bytesTo12Bits(bytes) {
-    const result = Array();
-    const pairsCount = Math.floor(bytes.length / 3);
-    const remainder = bytes.length % 3;
-
-    for (let i=0; i<pairsCount; i++) {
-        const end = Math.min(i*3+3, bytes.length);
-        const pair = bytes.slice(i*3, end);
-
-        result.push(...convert3BytesTo12Bits(pair));
+        twelveBitsPairs.push(pair.toString());
     }
 
-    if (remainder == 2) {
-        const firstByte = bytes[3*pairsCount];
-        const secondByte = bytes[3*pairsCount + 1];
-        result.push(...convert2BytesTo12Bits(firstByte, secondByte));
+    if (remainder === 1) {
+        const pair = TwelveBitsPair.fromBytes(binary.slice(i*3, i*3+1));
+        twelveBitsPairs.push(pair.toString());
+    } else if (remainder === 2) {
+        const pair = TwelveBitsPair.fromBytes(
+            binary.slice(i*3, i*3+2)
+        );
+
+        twelveBitsPairs.push(pair.toString());
     }
 
-    if (remainder == 1) {
-        const byte = bytes[3*pairsCount];
-        result.push(...convertByteTo12Bits(byte));
-    }
-
-    return result;
-}
-
-export function twelveBitsToBase4096(binary) {
-    const codePoint = baseCodePoint + binary;
-    return String.fromCodePoint(codePoint);
-}
-
-function charToCode12Bits(char) {
-    const codePoint = char.codePointAt(0);
-    return codePoint - baseCodePoint;
-}
-
-export function base4096PairToBytes(first, second, is2Bytes = false) {
-    const result = Array();
-
-    const first12Bits = charToCode12Bits(first);
-    const second12Bits = charToCode12Bits(second);
-
-    const firstByte = first12Bits >> 4;
-
-    if (second12Bits !== padding12Bits && !is2Bytes) {
-        // result is 3 bytes
-        const secondByte = (first12Bits & 0b0000_0000_1111) << 4 | (second12Bits >> 8);
-        const thirdByte = second12Bits & 0b0000_1111_1111;
-
-        result.push(firstByte, secondByte, thirdByte);
-    } else if (second12Bits !== padding12Bits && is2Bytes) {
-        // result is 2 bytes
-        const secondByte = (first12Bits & 0b0000_0000_1111) << 4 | (second12Bits >> 8);
-
-        result.push(firstByte, secondByte);
-    } else {
-        // result is single byte
-        result.push(firstByte);
-    }
-
-    return result;
+    return twelveBitsPairs.join("");
 }
 
 /**
+ * decode result.
+ * @typedef {Object} DecodeResult
+ * @property {number[]} result - result of decode
+ * @property {string[]} errors
+ */
+
+/**
  * @param {string} base4096Str
- * @returns {number[]}
+ * @returns {DecodeResult}
  */
 export function decode(base4096Str) {
     if (base4096Str === "") {
@@ -125,32 +241,41 @@ export function decode(base4096Str) {
     }
 
     const pairsCount = Math.floor(base4096Str.length / 2);
-    const isEndBytes2Bytes = (base4096Str.length % 2) === 1;
+    const isEndWith3Letters = (base4096Str.length % 2) === 1;
 
-    if (isEndBytes2Bytes) {
-        // if the length is even number, the final character should be padding.
-        const lastChar = base4096Str[base4096Str.length - 1];
-        console.assert(lastChar === paddingString, "The last character is invalid.");
+
+    const pairs = Array();
+    const errors = Array();
+
+    let i = 0;
+    try {
+        for (i = 0; i < (pairsCount-1); i++) {
+            const pair = TwelveBitsPair.fromString(
+                base4096Str.slice(i*2, i*2+2)
+            );
+
+            pairs.push(pair);
+        }
+
+        if (isEndWith3Letters) {
+            const pair = TwelveBitsPair.fromString(
+                base4096Str.slice((pairsCount-1)*2, (pairsCount-1)*2+3)
+            );
+
+            pairs.push(pair);
+        } else {
+            const pair = TwelveBitsPair.fromString(
+                base4096Str.slice((pairsCount-1)*2, (pairsCount-1)*2+2)
+            );
+
+            pairs.push(pair);
+        }
+    } catch(e) {
+        const position = i*2;
+        const invalidPair = base4096Str.slice(position, position+2);
+
+        throw `${invalidPair} is not a valid character pair in the position: ${position}`;
     }
 
-    const byteArray = Array();
-    for (let i = 0; i < (pairsCount-1); i++) {
-        const bytes = base4096PairToBytes(
-            base4096Str[i*2],
-            base4096Str[i*2+1],
-            false,
-        );
-
-        byteArray.push(...bytes);
-    }
-
-    const endBytes = base4096PairToBytes(
-        base4096Str[(pairsCount-1)*2],
-        base4096Str[(pairsCount-1)*2+1],
-        isEndBytes2Bytes,
-    );
-
-    byteArray.push(...endBytes);
-
-    return byteArray;
+    return pairs.flatMap((pair) => pair.toBytes());
 }
