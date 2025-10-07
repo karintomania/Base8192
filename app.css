@@ -59,7 +59,7 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
 }
 
-#encodedIn4096,
+#encodedIn8192,
 #encodedIn64,
 #decoded {
   background: white;
@@ -74,7 +74,7 @@ textarea:focus {
   margin-bottom: 1rem;
 }
 
-#encodedIn4096Count
+#encodedIn8192Count
 {
   font-size: 1.1rem;
 }

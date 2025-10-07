@@ -96,11 +96,11 @@ export class TwelveBitsPair {
     }
 
     /**
-     * @param {string} str - expects 2 letters of base4096 string
+     * @param {string} str - expects 2 letters of base8192 string
      */
     static fromString(str) {
         if (!(str.length === 2 || str.length === 3)) {
-            throw "Expecting 2 or 3 base4096 letters.";
+            throw "Expecting 2 or 3 base8192 letters.";
         }
 
         const left = TwelveBits.fromString(str[0], TwelveBitsType.LEFT);
@@ -234,28 +234,29 @@ export function encode(binary) {
  */
 
 /**
- * @param {number[]} base4096Str - array of uint8
+ * @param {number[]} base8192Str - array of uint8
  * @returns {DecodeResult}
  */
-export function decode(base4096Str) {
-    if (base4096Str === "") {
+export function decode(base8192Str) {
+    if (base8192Str === "") {
         return Array();
     }
 
-    const pairsCount = Math.floor(base4096Str.length / 2);
-    const isEndWith3Letters = (base4096Str.length % 2) === 1;
+    const pairsCount = Math.floor(base8192Str.length / 2);
+    const isEndWith3Letters = (base8192Str.length % 2) === 1;
+    const hasPadding = base8192Str[base8192Str.length-1] === paddingString;
 
     const pairs = Array();
     const errors = Array();
 
-    for (let i = 0; i < base4096Str.length-1;) {
+    for (let i = 0; i < base8192Str.length;) {
         try {
-            const leftStrCount = base4096Str.length - i;
+            const leftStrCount = base8192Str.length - i;
 
-            if (leftStrCount === 3) {
+            if (hasPadding && leftStrCount === 3) {
                 // decode final 3 letters
                 const pair = TwelveBitsPair.fromString(
-                    base4096Str.slice(i, i+3)
+                    base8192Str.slice(i, i+3)
                 );
 
                 i += 3;
@@ -266,7 +267,7 @@ export function decode(base4096Str) {
             }
 
             const pair = TwelveBitsPair.fromString(
-                base4096Str.slice(i, i+2)
+                base8192Str.slice(i, i+2)
             );
 
             i += 2;
@@ -274,7 +275,7 @@ export function decode(base4096Str) {
             pairs.push(pair);
 
         } catch(e) {
-            const invalidPair = base4096Str.slice(i, i+2);
+            const invalidPair = base8192Str.slice(i, i+2);
 
             errors.push(`${invalidPair} is not a valid character pair in the position: ${i}`);
 

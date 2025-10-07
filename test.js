@@ -5,7 +5,7 @@ import {
     TwelveBitsType,
     encode,
     decode,
-} from './base4096.js';
+} from './base8192.js';
 
 const replacement = [0xEF, 0xBF, 0xBD];
 
@@ -165,8 +165,8 @@ test("encode works", () => {
         ["abc", "吖恣"],
         ["abcd", "吖恣呀等"], // handle mod(3)=1 bytes
         ["abcde", "吖恣呆挀等"], // handle mod(3)=2 bytes
-        ["Hello, Base4096!!", "劆捬哆洬倄恡唶挴儃朶倒开等"], // handle mod(3)=2 bytes
-        ["今日は、Base4096🙏", "屋榊屩斥尸徯尸庁刦彳呓戰冓擰培枏"],
+        ["Hello, Base8192!!", "劆捬哆洬倄恡唶挴儃朶倒开等"], // handle mod(3)=2 bytes
+        ["今日は、Base8192🙏", "屋榊屩斥尸徯尸庁刦彳呓戰冓擰培枏"],
     ];
 
     cases.forEach(([str, want]) => {
@@ -199,9 +199,19 @@ test("decode works", () => {
 
 test("decode detects error", () => {
     const cases = [
-        ["吖吖", [replacement, ["吖吖 is not a valid character pair in the position: 0"]]],
-        ["吖恣呆吖", [[0x61, 0x62, 0x63, ...replacement], ["呆吖 is not a valid character pair in the position: 2"]]],
-        ["吖恣开等", [[0x61, 0x62, 0x63, ...replacement], ["开等 is not a valid character pair in the position: 2"]]],
+        ["吖吖", [[...replacement, ...replacement], [
+            "吖吖 is not a valid character pair in the position: 0",
+            "吖 is not a valid character pair in the position: 1",
+        ]]],
+        ["吖恣呆吖", [[0x61, 0x62, 0x63, ...replacement, ...replacement], [
+            "呆吖 is not a valid character pair in the position: 2",
+            "吖 is not a valid character pair in the position: 3"
+        ]]],
+        ["吖恣恣等", [[0x61, 0x62, 0x63, ...replacement, ...replacement], [
+            "恣等 is not a valid character pair in the position: 2",
+            "等 is not a valid character pair in the position: 3"
+        ]]],
+        ["吖恣开", [[0x61, 0x62, 0x63, ...replacement], ["开 is not a valid character pair in the position: 2"]]],
         ["吖吖吖恣", [[...replacement, ...replacement, 0x61, 0x62, 0x63], [
             "吖吖 is not a valid character pair in the position: 0",
             "吖吖 is not a valid character pair in the position: 1"
@@ -229,7 +239,7 @@ test("decode detects error", () => {
 //         "1",
 //         "12",
 //         "123",
-//         "hello $base4096!!",
+//         "hello $base8192!!",
 //         "multibytes letters: マルチバイト文字列",
 //     ];
 

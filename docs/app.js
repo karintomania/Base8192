@@ -1,12 +1,12 @@
-import {encode, decode, stringToUint8Array} from './base4096.js';
+import {encode, decode, stringToUint8Array} from './base8192.js';
 
 const textDecoder = new TextDecoder();
 
 function ready() {
-    const encodedIn4096Text = document.querySelector('#encodedIn4096');
+    const encodedIn8192Text = document.querySelector('#encodedIn8192');
     const encodedIn64Text = document.querySelector('#encodedIn64');
 
-    const encodedIn4096Count = document.querySelector('#encodedIn4096Count');
+    const encodedIn8192Count = document.querySelector('#encodedIn8192Count');
 
     const decodedText = document.querySelector('#decoded');
     const decodedError = document.querySelector('#decodeError');
@@ -18,13 +18,13 @@ function ready() {
         const str = toEncode.value;
         const bytes = stringToUint8Array(str);
 
-        const encodedIn4096 = encode(bytes);
+        const encodedIn8192 = encode(bytes);
         const encodedIn64 = bytes.toBase64();
 
-        encodedIn4096Text.innerText = encodedIn4096;
+        encodedIn8192Text.innerText = encodedIn8192;
         encodedIn64Text.innerText = encodedIn64;
 
-        encodedIn4096Count.innerText = `= ${encodedIn4096.length} characters (${encodedIn64.length} charactes in Base64).`;
+        encodedIn8192Count.innerText = `= ${encodedIn8192.length} characters (${encodedIn64.length} charactes in Base64).`;
     }
 
     const decodeInput = () => {
