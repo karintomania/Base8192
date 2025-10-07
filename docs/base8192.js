@@ -244,15 +244,16 @@ export function decode(base8192Str) {
 
     const pairsCount = Math.floor(base8192Str.length / 2);
     const isEndWith3Letters = (base8192Str.length % 2) === 1;
+    const hasPadding = base8192Str[base8192Str.length-1] === paddingString;
 
     const pairs = Array();
     const errors = Array();
 
-    for (let i = 0; i < base8192Str.length-1;) {
+    for (let i = 0; i < base8192Str.length;) {
         try {
             const leftStrCount = base8192Str.length - i;
 
-            if (leftStrCount === 3) {
+            if (hasPadding && leftStrCount === 3) {
                 // decode final 3 letters
                 const pair = TwelveBitsPair.fromString(
                     base8192Str.slice(i, i+3)
