@@ -30,15 +30,20 @@ function ready() {
     const decodeInput = () => {
         const str = toDecode.value;
 
-        try {
-            const bytes = decode(str);
+        const decodedResult = decode(str);
 
-            const decoded = textDecoder.decode(new Uint8Array(bytes));
+        const decoded = textDecoder.decode(new Uint8Array(decodedResult.result));
 
-            decodeError.innerText = "";
-            decodedText.innerText = decoded;
-        } catch (e) {
-            decodeError.innerText = e;
+        console.log(decoded);
+
+        decodeError.innerText = "";
+        decodedText.innerText = decoded;
+
+        if (decodedResult.errors.length > 0) {
+            const innerHtml = decodedResult.errors.map(
+                (msg) => `<li>${msg}</li>`
+            ).join("");
+            decodeError.innerHTML = innerHtml;
         }
     };
 

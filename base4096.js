@@ -5,6 +5,8 @@ const baseCodePointLeft = 0x4E00;
 // "帀":U+5E00
 const baseCodePointRight = 0x5E00;
 
+const replacement = [0xEF, 0xBF, 0xBD];
+
 // use 等:U+7B49 for padding.
 // 等 means equal, btw.
 const padding12Bits = 0x7B49;
@@ -232,7 +234,7 @@ export function encode(binary) {
  */
 
 /**
- * @param {string} base4096Str
+ * @param {number[]} base4096Str - array of uint8
  * @returns {DecodeResult}
  */
 export function decode(base4096Str) {
@@ -243,39 +245,48 @@ export function decode(base4096Str) {
     const pairsCount = Math.floor(base4096Str.length / 2);
     const isEndWith3Letters = (base4096Str.length % 2) === 1;
 
-
     const pairs = Array();
     const errors = Array();
 
-    let i = 0;
-    try {
-        for (i = 0; i < (pairsCount-1); i++) {
+    for (let i = 0; i < base4096Str.length-1;) {
+        try {
+            const leftStrCount = base4096Str.length - i;
+
+            if (leftStrCount === 3) {
+                // decode final 3 letters
+                const pair = TwelveBitsPair.fromString(
+                    base4096Str.slice(i, i+3)
+                );
+
+                i += 3;
+
+                pairs.push(pair);
+
+                continue;
+            }
+
             const pair = TwelveBitsPair.fromString(
-                base4096Str.slice(i*2, i*2+2)
+                base4096Str.slice(i, i+2)
             );
 
+            i += 2;
+
             pairs.push(pair);
+
+        } catch(e) {
+            const invalidPair = base4096Str.slice(i, i+2);
+
+            errors.push(`${invalidPair} is not a valid character pair in the position: ${i}`);
+
+            pairs.push(null);
+
+            i += 1;
         }
-
-        if (isEndWith3Letters) {
-            const pair = TwelveBitsPair.fromString(
-                base4096Str.slice((pairsCount-1)*2, (pairsCount-1)*2+3)
-            );
-
-            pairs.push(pair);
-        } else {
-            const pair = TwelveBitsPair.fromString(
-                base4096Str.slice((pairsCount-1)*2, (pairsCount-1)*2+2)
-            );
-
-            pairs.push(pair);
-        }
-    } catch(e) {
-        const position = i*2;
-        const invalidPair = base4096Str.slice(position, position+2);
-
-        throw `${invalidPair} is not a valid character pair in the position: ${position}`;
     }
 
-    return pairs.flatMap((pair) => pair.toBytes());
+    const result = pairs.flatMap(
+        (pair) => (pair) ? pair.toBytes() : replacement
+    );
+
+    return {"result": result, "errors": errors};
 }

@@ -88,6 +88,10 @@ textarea:focus {
   margin-top: 0.5rem;
   display: none;
   font-weight: 500;
+
+  li {
+    list-style-position: inside;
+  }
 }
 
 #decodeError:not(:empty) {
