@@ -11,3 +11,6 @@ publish:
 
 test:
 	node test.js
+
+build-wasm:
+	zig build
