@@ -39,6 +39,81 @@ const TwelveBits = struct {
     }
 };
 
+const TwelveBitsPair = struct {
+    left: TwelveBits,
+    right: ?TwelveBits,
+    padding: ?TwelveBits,
+
+    pub fn initFromBytes(bytes: []const u8) error{InvalidSliceLength}!TwelveBitsPair {
+        // TODO: length check of bytes
+        if (bytes.len < 1 or bytes.len > 3) return error.InvalidSliceLength;
+
+        switch (bytes.len) {
+            1 => {
+                const leftBits: u12 = (@as(u12, bytes[0]) << 4);
+
+                return TwelveBitsPair{
+                    .left = TwelveBits.init(leftBits, .left),
+                    .right = null,
+                    .padding = TwelveBits.init(0, .padding),
+                };
+            },
+            2 => {
+                const leftBits: u12 = (@as(u12, bytes[0]) << 4) | (@as(u12, bytes[1]) >> 4);
+                const rightBits: u12 = (@as(u12, bytes[1] & 0b00001111) << 8);
+
+                return TwelveBitsPair{
+                    .left = TwelveBits.init(leftBits, .left),
+                    .right = TwelveBits.init(rightBits, .right),
+                    .padding = TwelveBits.init(0, .padding),
+                };
+            },
+            3 => {
+                const leftBits: u12 = (@as(u12, bytes[0]) << 4) | (@as(u12, bytes[1]) >> 4);
+                const rightBits: u12 = (@as(u12, bytes[1] & 0b00001111) << 8) | @as(u12, bytes[2]);
+
+                return TwelveBitsPair{
+                    .left = TwelveBits.init(leftBits, .left),
+                    .right = TwelveBits.init(rightBits, .right),
+                    .padding = null,
+                };
+            },
+            else => unreachable,
+        }
+    }
+
+    pub fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
+        var sequences = std.ArrayList([]const u8).init(allocator);
+        defer sequences.deinit();
+
+        const leftSeq = try tbp.left.toUtf8Sequence(allocator);
+        defer allocator.free(leftSeq);
+        try sequences.append(leftSeq);
+
+        var rightSeq: ?[]u8 = null;
+        if (tbp.right) |right| {
+            rightSeq = try right.toUtf8Sequence(allocator);
+            try sequences.append(rightSeq.?);
+        }
+        defer if (rightSeq) |seq| allocator.free(seq);
+
+        var paddingSeq: ?[]u8 = null;
+        if (tbp.padding) |padding| {
+            paddingSeq = try padding.toUtf8Sequence(allocator);
+            try sequences.append(paddingSeq.?);
+        }
+        defer if (paddingSeq) |seq| allocator.free(seq);
+
+        const result = try std.mem.concat(
+            allocator,
+            u8,
+            sequences.items,
+        );
+
+        return result;
+    }
+};
+
 pub fn rotateChar(c: u8) u8 {
     return switch (c) {
         'A'...'M' => c + 13,
@@ -49,14 +124,53 @@ pub fn rotateChar(c: u8) u8 {
     };
 }
 
-pub fn encode(input: []const u8) []const u8 {
-    return input;
+pub fn encode(input: []const u8, allocator: Allocator) ![]const u8 {
+    var i: usize = 0;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var seq = std.ArrayList(u8).init(allocator);
+
+    while (i+2 < input.len) {
+        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i..i+3]);
+        const str = try twelveBitsPair.toEncodedUtf8String(arena_allocator);
+
+        try seq.appendSlice(str);
+        i += 3;
+    }
+
+    if (input.len - i != 0) {
+        const remainder = input.len - i;
+        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i..i+remainder]);
+        const str = try twelveBitsPair.toEncodedUtf8String(arena_allocator);
+
+        try seq.appendSlice(str);
+    }
+
+    return seq.toOwnedSlice();
 }
 
 test "encode returns expected result" {
-    const input = "test";
-    const result = encode(input);
-    try std.testing.expectEqualStrings("test", result);
+    const allocator = std.testing.allocator;
+
+    const TestCase = struct {
+        input: []const u8,
+        want: []const u8,
+    };
+
+    const test_cases = [_]TestCase{
+        .{ .input = "abc", .want = "吖恣" },
+        .{ .input = "abcd", .want = "吖恣呀等" },
+        .{ .input = "abcde", .want = "吖恣呆挀等" },
+        .{ .input = "今日は、Base8192🙏", .want = "屋榊屩斥尸徯尸庁刦彳呓昱冓惰培枏" },
+    };
+
+    for (test_cases) |test_case| {
+        const got = try encode(test_case.input, allocator);
+        defer allocator.free(got);
+        try std.testing.expectEqualStrings(test_case.want, got);
+    }
 }
 
 test "TwelveBits" {
@@ -87,6 +201,33 @@ test "TwelveBits" {
         defer allocator.free(got);
 
         try std.testing.expectEqualStrings(test_case.want, got);
+    }
+}
+
+test "TwelveBitsPair" {
+    const allocator = std.testing.allocator;
+
+    const TestCase = struct {
+        bytes: []const u8,
+        expected: []const u8,
+    };
+
+    const test_cases = [_]TestCase{
+        .{.bytes = &[_]u8{ 0x00, 0x0F, 0xFF }, .expected = "一淿"},
+        .{.bytes = &[_]u8{ 0x61, 0x62, 0x63 }, .expected = "吖恣"},
+        .{.bytes = &[_]u8{ 0x00 }, .expected = "一等"},
+        .{.bytes = &[_]u8{ 0x00, 0x61 }, .expected = "丆开等"},
+    };
+
+    for (test_cases) |test_case| {
+        const bytes = test_case.bytes;
+
+        const tbp = try TwelveBitsPair.initFromBytes(bytes);
+
+        const result = try tbp.toEncodedUtf8String(allocator);
+        defer allocator.free(result);
+
+        try std.testing.expectEqualStrings(test_case.expected, result);
     }
 }
 

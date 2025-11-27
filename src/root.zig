@@ -22,21 +22,24 @@ pub export fn deallocate(ptr: [*]u8, size: usize) void {
     allocator.free(slice);
 }
 
-pub export fn rot13(input_ptr: [*]u8, length: usize) ?[*]u8 {
+pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
     // Create slice from pointer and length
     const input = input_ptr[0..length];
 
-    // Allocate output buffer
-    const output = allocator.alloc(u8, length) catch return null;
+    const result = base8192.encode(input, allocator) catch return null;
 
-    // Process each character
-    for (input, 0..) |char, i| {
-        output[i] = base8192.rotateChar(char);
-    }
+    // Allocate output buffer
+    const output = allocator.alloc(u8, result.len) catch return null;
+
+    @memcpy(output, result);
 
     return output.ptr;
 }
 
-test "rotateChar basic cases" {
-    try std.testing.expectEqual(@as(u8, 'N'), base8192.rotateChar('A'));
+test "encode" {
+    const input = "abc";
+
+    const result = encode(input.ptr, input.len).?;
+
+    try std.testing.expectEqualStrings("吖恣", result[0..6]);
 }
