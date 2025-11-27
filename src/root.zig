@@ -1,7 +1,12 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const base8192 = @import("base8192.zig");
 
 // Use the WebAssembly-specific allocator for freestanding target
-const allocator = std.heap.wasm_allocator;
+const allocator = if (builtin.cpu.arch == .wasm32)
+    std.heap.wasm_allocator
+else
+    std.heap.page_allocator;
 
 /// Allocate memory accessible from JavaScript
 /// Returns a pointer that JS can write to
@@ -17,22 +22,6 @@ pub export fn deallocate(ptr: [*]u8, size: usize) void {
     allocator.free(slice);
 }
 
-/// Rotate a single ASCII character by 13 positions
-/// Only affects A-Z and a-z, leaves other characters unchanged
-fn rotateChar(c: u8) u8 {
-    return switch (c) {
-        'A'...'M' => c + 13,
-        'N'...'Z' => c - 13,
-        'a'...'m' => c + 13,
-        'n'...'z' => c - 13,
-        else => c,
-    };
-}
-
-/// Apply ROT13 encoding to a string
-/// Takes pointer to input string and its length
-/// Returns pointer to newly allocated result string
-/// JS must call deallocate() with the returned pointer and length when done
 pub export fn rot13(input_ptr: [*]u8, length: usize) ?[*]u8 {
     // Create slice from pointer and length
     const input = input_ptr[0..length];
@@ -42,8 +31,12 @@ pub export fn rot13(input_ptr: [*]u8, length: usize) ?[*]u8 {
 
     // Process each character
     for (input, 0..) |char, i| {
-        output[i] = rotateChar(char);
+        output[i] = base8192.rotateChar(char);
     }
 
     return output.ptr;
+}
+
+test "rotateChar basic cases" {
+    try std.testing.expectEqual(@as(u8, 'N'), base8192.rotateChar('A'));
 }
