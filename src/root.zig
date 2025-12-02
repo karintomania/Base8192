@@ -22,24 +22,57 @@ pub export fn deallocate(ptr: [*]u8, size: usize) void {
     allocator.free(slice);
 }
 
+/// Calculate the output length for Base8192 encoding
+pub export fn getEncodedLength(input_length: usize) usize {
+    const full_chunks = input_length / 3;
+    const remainder = input_length % 3;
+
+    const padding_bytes: usize = if (remainder == 0)
+        0
+    else if (remainder == 1)
+        6
+    else
+        9;
+
+    return full_chunks * 6 + padding_bytes;
+}
+
 pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
-    // Create slice from pointer and length
     const input = input_ptr[0..length];
 
     const result = base8192.encode(input, allocator) catch return null;
 
-    // Allocate output buffer
-    const output = allocator.alloc(u8, result.len) catch return null;
-
-    @memcpy(output, result);
-
-    return output.ptr;
+    return result.ptr;
 }
 
 test "encode" {
-    const input = "abc";
+      const test_cases = [_]struct { []const u8, []const u8 }{
+          .{ "abc", "吖恣" },
+          .{ "abcd", "吖恣呀等" },
+          .{ "abcde", "吖恣呆挀等" },
+      };
+    for (test_cases) |test_case| {
+        const input, const want = test_case;
 
-    const result = encode(input.ptr, input.len).?;
+        // Get the expected output length
+        const output_len = getEncodedLength(input.len);
 
-    try std.testing.expectEqualStrings("吖恣", result[0..6]);
+        // Encode the input
+        const result_ptr = encode(input.ptr, input.len).?;
+        const result = result_ptr[0..output_len];
+
+        // Verify the encoding
+        try std.testing.expectEqualStrings(want, result);
+
+        // Clean up - deallocate the memory
+        deallocate(result_ptr, output_len);
+    }
+}
+
+test "getEncodedLength" {
+    try std.testing.expectEqual(@as(usize, 6), getEncodedLength(3));
+
+    try std.testing.expectEqual(@as(usize, 12), getEncodedLength(4));
+
+    try std.testing.expectEqual(@as(usize, 15), getEncodedLength(5));
 }

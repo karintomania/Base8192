@@ -124,7 +124,7 @@ pub fn rotateChar(c: u8) u8 {
     };
 }
 
-pub fn encode(input: []const u8, allocator: Allocator) ![]const u8 {
+pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
     var i: usize = 0;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();

@@ -3,16 +3,14 @@ const std = @import("std");
 // mimic the command below:
 // zig build-exe root.zig -target wasm32-freestanding -fno-entry --export=add;
 pub fn build(b: *std.Build) void {
-    const optimize = b.standardOptimizeOption(.{});
-
     const exe = b.addExecutable(.{
-        .name = "add-two",
+        .name = "base8192",
         .root_source_file = b.path("src/root.zig"),
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
         }),
-        .optimize = optimize,
+        .optimize = .ReleaseSmall,
     });
 
     exe.entry = .disabled;

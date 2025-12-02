@@ -1,8 +1,48 @@
 import {encode, decode, stringToUint8Array} from './base8192.js';
+import {encoded} from './encoded_wasm.js';
 
 const textDecoder = new TextDecoder();
 
-function ready() {
+async function decodeWasm() {
+    const decoded = decode(encoded);
+    const wasm = await WebAssembly.instantiate(new Uint8Array(decoded.result), {env: {}});
+
+    const wasmInstance = wasm.instance;
+    const wasmMemory = wasmInstance.exports.memory;
+
+    const input = 'abcde';
+
+    const encoder = new TextEncoder();
+    const inputBytes = encoder.encode(input);
+    const inputLength = inputBytes.length;
+
+    // allocate input
+    const inputPtr = wasmInstance.exports.allocate(inputLength);
+
+    const wasmMemoryView = new Uint8Array(wasmMemory.buffer);
+    wasmMemoryView.set(inputBytes, inputPtr);
+
+    const outputPtr = wasmInstance.exports.encode(inputPtr, inputLength);
+
+    const outputLength = wasmInstance.exports.getEncodedLength(inputLength);
+
+    const outputBytes = new Uint8Array(
+        wasmMemory.buffer,
+        outputPtr,
+        outputLength,
+    );
+
+    const decoder = new TextDecoder('utf-8');
+    const result = decoder.decode(outputBytes);
+    console.log(result);
+
+    wasmInstance.exports.deallocate(inputPtr, inputLength);
+    wasmInstance.exports.deallocate(outputPtr, outputLength);
+}
+
+async function ready() {
+    await decodeWasm();
+
     const encodedIn8192Text = document.querySelector('#encodedIn8192');
     const encodedIn64Text = document.querySelector('#encodedIn64');
 
