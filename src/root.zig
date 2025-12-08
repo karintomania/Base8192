@@ -46,11 +46,11 @@ pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
 }
 
 test "encode" {
-      const test_cases = [_]struct { []const u8, []const u8 }{
-          .{ "abc", "吖恣" },
-          .{ "abcd", "吖恣呀等" },
-          .{ "abcde", "吖恣呆挀等" },
-      };
+    const test_cases = [_]struct { []const u8, []const u8 }{
+        .{ "abc", "吖恣" },
+        .{ "abcd", "吖恣呀等" },
+        .{ "abcde", "吖恣呆挀等" },
+    };
     for (test_cases) |test_case| {
         const input, const want = test_case;
 

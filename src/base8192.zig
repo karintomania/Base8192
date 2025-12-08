@@ -26,6 +26,31 @@ const TwelveBits = struct {
         return TwelveBits{ .bits = if (tbType == .padding) 0 else bits, .type = tbType };
     }
 
+    pub fn initFromUnicodePoint(codePoint: u21, tbType: TwelveBitsType) !TwelveBits {
+        std.debug.print("codepoint: {x}", .{ codePoint });
+        var bits: u12 = undefined;
+        switch (tbType) {
+            .left => {
+                if (codePoint < baseCodePointLeft or (baseCodePointLeft + 0xFFF) < codePoint) {
+                    return error.InvalidCodePoint;
+                }
+                bits = @truncate(codePoint - baseCodePointLeft);
+            },
+            .right => {
+                if (codePoint < baseCodePointRight or (baseCodePointRight + 0xFFF) < codePoint) {
+                    return error.InvalidCodePoint;
+                }
+                bits = @truncate(codePoint - baseCodePointRight);
+            },
+            .padding => {
+                if (codePoint != paddingCodepoint) return error.InvalidCodePoint;
+                bits = @truncate(paddingCodepoint);
+            },
+        }
+
+        return TwelveBits{ .bits = bits, .type = tbType };
+    }
+
     pub fn toUtf8Sequence(tb: *const TwelveBits, allocator: Allocator) ![]u8 {
         const codepoint = switch (tb.type) {
             .left => baseCodePointLeft + tb.bits,
@@ -82,6 +107,9 @@ const TwelveBitsPair = struct {
         }
     }
 
+    // pub fn initFromEncodedUtf8String() TwelveBitsPair {
+    // }
+
     pub fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
         var sequences = std.ArrayList([]const u8).init(allocator);
         defer sequences.deinit();
@@ -132,8 +160,8 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
 
     var seq = std.ArrayList(u8).init(allocator);
 
-    while (i+2 < input.len) {
-        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i..i+3]);
+    while (i + 2 < input.len) {
+        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i .. i + 3]);
         const str = try twelveBitsPair.toEncodedUtf8String(arena_allocator);
 
         try seq.appendSlice(str);
@@ -142,7 +170,7 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
 
     if (input.len - i != 0) {
         const remainder = input.len - i;
-        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i..i+remainder]);
+        const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i .. i + remainder]);
         const str = try twelveBitsPair.toEncodedUtf8String(arena_allocator);
 
         try seq.appendSlice(str);
@@ -173,7 +201,7 @@ test "encode returns expected result" {
     }
 }
 
-test "TwelveBits" {
+test "TwelveBits toUtf8Sequence" {
     const allocator = std.testing.allocator;
 
     const TestCase = struct {
@@ -204,6 +232,29 @@ test "TwelveBits" {
     }
 }
 
+test "TwelveBits initFromUnicodePoint" {
+    const test_cases = [_]struct {
+            letter: []const u8,
+            tbType: TwelveBitsType,
+            want: u12,
+        }{
+        .{ .letter = "一", .tbType = .left, .want = 0 },
+        // .{ .bits = 1, .tbType = .left, .want = "丁" },
+        // .{ .bits = 0xFFF, .tbType = .left, .want = "巿" },
+        // .{ .bits = 0, .tbType = .right, .want = "帀" },
+        // .{ .bits = 1, .tbType = .right, .want = "币" },
+        // .{ .bits = 0xFFF, .tbType = .right, .want = "淿" },
+        // .{ .bits = 0, .tbType = .padding, .want = "等" },
+    };
+
+    for (test_cases) |test_case| {
+        const codePoint = try std.unicode.utf8Decode3(test_case.letter[0..3].*);
+        const tb = try TwelveBits.initFromUnicodePoint(codePoint, test_case.tbType);
+
+        try std.testing.expectEqual(test_case.want, tb.bits);
+    }
+}
+
 test "TwelveBitsPair" {
     const allocator = std.testing.allocator;
 
@@ -213,10 +264,10 @@ test "TwelveBitsPair" {
     };
 
     const test_cases = [_]TestCase{
-        .{.bytes = &[_]u8{ 0x00, 0x0F, 0xFF }, .expected = "一淿"},
-        .{.bytes = &[_]u8{ 0x61, 0x62, 0x63 }, .expected = "吖恣"},
-        .{.bytes = &[_]u8{ 0x00 }, .expected = "一等"},
-        .{.bytes = &[_]u8{ 0x00, 0x61 }, .expected = "丆开等"},
+        .{ .bytes = &[_]u8{ 0x00, 0x0F, 0xFF }, .expected = "一淿" },
+        .{ .bytes = &[_]u8{ 0x61, 0x62, 0x63 }, .expected = "吖恣" },
+        .{ .bytes = &[_]u8{0x00}, .expected = "一等" },
+        .{ .bytes = &[_]u8{ 0x00, 0x61 }, .expected = "丆开等" },
     };
 
     for (test_cases) |test_case| {
