@@ -106,8 +106,35 @@ const TwelveBitsPair = struct {
         }
     }
 
-    // pub fn initFromEncodedUtf8String() TwelveBitsPair {
-    // }
+    pub fn initFromCodePoints(leftCodePoint: u21, rightCodePoint: ?u21, paddingCodePointArg: ?u21) !TwelveBitsPair {
+        const leftTwelveBit = TwelveBits.init(
+            @truncate(leftCodePoint - baseCodePointLeft),
+            .left);
+
+        const rightTwelveBit =
+            if (rightCodePoint != null)
+                TwelveBits.init(
+                    @truncate(rightCodePoint.? - baseCodePointRight),
+                    .right)
+            else null;
+
+        const paddingTwelveBit =
+            if (paddingCodePointArg != null)
+                TwelveBits.init(0, .padding)
+            else null;
+
+        return TwelveBitsPair{.left = leftTwelveBit, .right = rightTwelveBit, .padding = paddingTwelveBit};
+    }
+
+    fn getFixedLengthArray(str: []const u8, allocator: Allocator) ![3]u8 {
+        if (str.len != 3) return error.InvalidSliceLength;
+
+        const ary = allocator.alloc(u8, 3);
+
+        @memcpy(ary, str.ptr);
+
+        return ary.*;
+    }
 
     pub fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
         var sequences = std.ArrayList([]const u8).init(allocator);
@@ -268,6 +295,44 @@ test "TwelveBitsPair" {
         defer allocator.free(result);
 
         try std.testing.expectEqualStrings(test_case.expected, result);
+    }
+}
+
+test "TwelveBitsPair initFromEncodedStringInUtf8" {
+    const TestCase = struct {
+        str: []const u8,
+        wantLeft: u12,
+        wantRight: ?u12,
+        wantPadding: ?u12,
+    };
+
+    const test_cases = [_]TestCase{
+        .{ .str = "一淿", .wantLeft = 0x000, .wantRight = 0xFFF, .wantPadding = null },
+        .{ .str = "一等", .wantLeft = 0x000, .wantRight = null, .wantPadding = 0 },
+        // .{ .bytes = &[_]u8{ 0x00, 0x0F, 0xFF }, .expected = "一淿" },
+        // .{ .bytes = &[_]u8{ 0x61, 0x62, 0x63 }, .expected = "吖恣" },
+        // .{ .bytes = &[_]u8{0x00}, .expected = "一等" },
+        // .{ .bytes = &[_]u8{ 0x00, 0x61 }, .expected = "丆开等" },
+    };
+
+    for (test_cases) |t| {
+        var it = (try unicode.Utf8View.init(t.str)).iterator();
+        const first = it.nextCodepoint().?;
+        const second = it.nextCodepoint().?;
+        const third = it.nextCodepoint() orelse null;
+
+        const result =
+            if (second == paddingCodepoint) // if the second is padding
+                try TwelveBitsPair.initFromCodePoints(first, null, second)
+            else
+                try TwelveBitsPair.initFromCodePoints(first, second, third);
+
+        try std.testing.expectEqual(t.wantLeft, result.left.bits);
+        if (t.wantRight) |wantRight| {
+            try std.testing.expectEqual(wantRight, result.right.?.bits);
+        } else {
+            try std.testing.expectEqual(null, result.right);
+        }
     }
 }
 
