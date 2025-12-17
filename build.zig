@@ -21,6 +21,7 @@ pub fn build(b: *std.Build) void {
     // Add test step
     const unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
+        .target = b.graph.host,
     });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);

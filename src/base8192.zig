@@ -27,7 +27,6 @@ const TwelveBits = struct {
     }
 
     pub fn initFromUnicodePoint(codePoint: u21, tbType: TwelveBitsType) !TwelveBits {
-        std.debug.print("codepoint: {x}", .{ codePoint });
         var bits: u12 = undefined;
         switch (tbType) {
             .left => {
@@ -44,7 +43,7 @@ const TwelveBits = struct {
             },
             .padding => {
                 if (codePoint != paddingCodepoint) return error.InvalidCodePoint;
-                bits = @truncate(paddingCodepoint);
+                bits = 0;
             },
         }
 
@@ -142,16 +141,6 @@ const TwelveBitsPair = struct {
     }
 };
 
-pub fn rotateChar(c: u8) u8 {
-    return switch (c) {
-        'A'...'M' => c + 13,
-        'N'...'Z' => c - 13,
-        'a'...'m' => c + 13,
-        'n'...'z' => c - 13,
-        else => c,
-    };
-}
-
 pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
     var i: usize = 0;
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -234,17 +223,17 @@ test "TwelveBits toUtf8Sequence" {
 
 test "TwelveBits initFromUnicodePoint" {
     const test_cases = [_]struct {
-            letter: []const u8,
-            tbType: TwelveBitsType,
-            want: u12,
-        }{
+        letter: []const u8,
+        tbType: TwelveBitsType,
+        want: u12,
+    }{
         .{ .letter = "一", .tbType = .left, .want = 0 },
-        // .{ .bits = 1, .tbType = .left, .want = "丁" },
-        // .{ .bits = 0xFFF, .tbType = .left, .want = "巿" },
-        // .{ .bits = 0, .tbType = .right, .want = "帀" },
-        // .{ .bits = 1, .tbType = .right, .want = "币" },
-        // .{ .bits = 0xFFF, .tbType = .right, .want = "淿" },
-        // .{ .bits = 0, .tbType = .padding, .want = "等" },
+        .{ .letter = "丁", .tbType = .left, .want = 1 },
+        .{ .letter = "巿", .tbType = .left, .want = 0xFFF },
+        .{ .letter = "帀", .tbType = .right, .want = 0 },
+        .{ .letter = "币", .tbType = .right, .want = 1 },
+        .{ .letter = "淿", .tbType = .right, .want = 0xFFF },
+        .{ .letter = "等", .tbType = .padding, .want = 0 },
     };
 
     for (test_cases) |test_case| {
