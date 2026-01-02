@@ -28,4 +28,16 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    // add generate js step
+    const gen_js = b.addExecutable(.{
+        .name = "gen_js",
+        .root_source_file = b.path("src/gen_js.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSmall,
+    });
+
+    const run_gen_js = b.addRunArtifact(gen_js);
+    const gen_js_step = b.step("gen_js", "Generate base8192 encoded binary of the encoder in js file.");
+    gen_js_step.dependOn(&run_gen_js.step);
 }
