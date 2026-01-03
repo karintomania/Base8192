@@ -1,7 +1,7 @@
 const fs = require('fs');
 
 async function runWasm() {
-    const source = fs.readFileSync("zig-out/bin/add-two.wasm");
+    const source = fs.readFileSync("zig-out/bin/base8192.wasm");
     const typedArray = new Uint8Array(source);
 
     const wasm = await WebAssembly.instantiate(typedArray, {env: {}});
@@ -21,14 +21,20 @@ async function runWasm() {
     const wasmMemoryView = new Uint8Array(wasmMemory.buffer);
     wasmMemoryView.set(inputBytes, inputPtr);
 
-    const outputPtr = wasmInstance.exports.encode(inputPtr, inputLength);
+    const outputResultPtr = wasmInstance.exports.encode(inputPtr, inputLength);
 
-    const outputLength = wasmInstance.exports.getEncodedLength(inputLength);
+    // read first 4 bytes = length of the result
+    const outputLen = new Uint32Array(
+        wasmMemory.buffer,
+        outputResultPtr,
+        1,
+    )[0];
 
+    // read encoded string
     const outputBytes = new Uint8Array(
         wasmMemory.buffer,
-        outputPtr,
-        outputLength,
+        outputResultPtr + 4,
+        outputLen,
     );
 
     const decoder = new TextDecoder('utf-8');
@@ -36,7 +42,7 @@ async function runWasm() {
     console.log(result);
 
     wasmInstance.exports.deallocate(inputPtr, inputLength);
-    wasmInstance.exports.deallocate(outputPtr, outputLength);
+    wasmInstance.exports.deallocate(outputResultPtr, outputLen+4);
 }
 
 

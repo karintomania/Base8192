@@ -22,25 +22,22 @@ pub export fn deallocate(ptr: [*]u8, size: usize) void {
     allocator.free(slice);
 }
 
-/// Calculate the output length for Base8192 encoding
-pub export fn getEncodedLength(input_length: usize) usize {
-    const full_chunks = input_length / 3;
-    const remainder = input_length % 3;
-
-    const padding_bytes: usize = if (remainder == 0)
-        0
-    else if (remainder == 1)
-        6
-    else
-        9;
-
-    return full_chunks * 6 + padding_bytes;
-}
-
 pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
-    const input = input_ptr[0..length];
 
-    const result = base8192.encode(input, allocator) catch return null;
+    const input = input_ptr[0..length];
+    const encoded = base8192.encode(input, allocator) catch {
+        return null;
+    };
+
+    const result = allocator.alloc(u8, encoded.len + 4) catch {
+        return null;
+    };
+
+    std.mem.writeInt(u32, result[0..4], @intCast(encoded.len), .little);
+
+    @memcpy(result[4..], encoded);
+
+    allocator.free(encoded);
 
     return result.ptr;
 }
@@ -54,25 +51,18 @@ test "encode" {
     for (test_cases) |test_case| {
         const input, const want = test_case;
 
-        // Get the expected output length
-        const output_len = getEncodedLength(input.len);
-
         // Encode the input
         const result_ptr = encode(input.ptr, input.len).?;
-        const result = result_ptr[0..output_len];
+        const output_len = std.mem.readInt(u32, result_ptr[0..4], .little);
+
+        const result = result_ptr[4..output_len+4];
+        std.debug.print("output_len: {d}\n", .{output_len});
+        std.debug.print("result: {s}\n", .{result});
 
         // Verify the encoding
-        try std.testing.expectEqualStrings(want, result);
+        try std.testing.expectEqualSlices(u8, want, result);
 
         // Clean up - deallocate the memory
         deallocate(result_ptr, output_len);
     }
-}
-
-test "getEncodedLength" {
-    try std.testing.expectEqual(@as(usize, 6), getEncodedLength(3));
-
-    try std.testing.expectEqual(@as(usize, 12), getEncodedLength(4));
-
-    try std.testing.expectEqual(@as(usize, 15), getEncodedLength(5));
 }
