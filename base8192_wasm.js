@@ -1,23 +1,9 @@
-const fs = require('fs');
+import {encoded} from './encoded_wasm.js';
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');
 
-async function runWasm() {
-    const source = fs.readFileSync("zig-out/bin/base8192.wasm");
-    const typedArray = new Uint8Array(source);
-
-    const wasm = await WebAssembly.instantiate(typedArray, {env: {}});
-
-    const wasmInstance = wasm.instance;
-    const wasmMemory = wasmInstance.exports.memory;
-
-    await test_encode(wasmInstance, wasmMemory);
-    await test_decode(wasmInstance, wasmMemory);
-}
-
-async function test_encode(wasmInstance, wasmMemory) {
-    const input = 'abcde';
-
+export async function encode_w(input, wasmInstance, wasmMemory) {
     const inputBytes = encoder.encode(input);
     const inputLength = inputBytes.length;
 
@@ -28,17 +14,12 @@ async function test_encode(wasmInstance, wasmMemory) {
     wasmMemoryView.set(inputBytes, inputPtr);
 
     const outputPtr = wasmInstance.exports.encode(inputPtr, inputLength);
-
     const result = parseWasmStringPointer(outputPtr, wasmMemory, wasmInstance);
-
-    console.log(result);
 
     wasmInstance.exports.deallocate(inputPtr, inputLength);
 }
 
-async function test_decode(wasmInstance, wasmMemory) {
-    const input = "吖恣";
-
+export async function decode_w(input, wasmInstance, wasmMemory) {
     const inputBytes = encoder.encode(input);
     const inputLength = inputBytes.length;
 
@@ -48,7 +29,6 @@ async function test_decode(wasmInstance, wasmMemory) {
     wasmMemoryView.set(inputBytes, inputPtr);
 
     const outputPtr = wasmInstance.exports.decode(inputPtr, inputLength);
-
     const result = parseWasmStringPointer(outputPtr, wasmMemory, wasmInstance);
 
     console.log(result);
@@ -77,4 +57,3 @@ function parseWasmStringPointer(ptr, wasmMemory, wasmInstance) {
     return result;
 }
 
-runWasm();

@@ -12,9 +12,6 @@ const baseCodePointRight: u21 = 0x5E00;
 const paddingCodepoint: u21 = 0x7B49;
 const paddingString = "等";
 
-// Show unknown string for decode error
-const replacement = []const u8{ 0xEF, 0xBF, 0xBD };
-
 const TwelveBitsType = enum {
     left,
     right,
@@ -221,14 +218,14 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
 
 const decodeResult = struct {
     result: []u8,
-    errors: []u64,
+    errors: []u32,
 };
 
 pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
-    var i: usize = 0;
+    var i: u32 = 0;
 
     var result = std.ArrayList(u8).init(allocator);
-    var errors = std.ArrayList(u64).init(allocator);
+    var errors = std.ArrayList(u32).init(allocator);
 
     defer result.deinit();
     defer errors.deinit();
@@ -252,7 +249,7 @@ pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
         const first: u21 = codepoints.items[i];
         var second: ?u21 = null;
         var padding: ?u21 = null;
-        var consumed: usize = 0;
+        var consumed: u8 = 0;
 
         if (unhandledCodepoints == 3 and hasPadding) {
             second = codepoints.items[i + 1];
@@ -276,7 +273,7 @@ pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
         const n = twelveBitsPair.toBytes(&bytes);
         try result.appendSlice(bytes[0..n]);
 
-        i += consumed;
+        i += @intCast(consumed);
     }
 
     return decodeResult{ .result = try result.toOwnedSlice(), .errors = try errors.toOwnedSlice() };
@@ -334,19 +331,19 @@ test "decode handles errors" {
     const TestCase = struct {
         input: []const u8,
         result: []const u8,
-        errors: []const u64,
+        errors: []const u32,
     };
 
     const test_cases = [_]TestCase{
         .{
             .input = "吖恣吖吖恣",
             .result = "abcabc",
-            .errors = &[_]u64{2},
+            .errors = &[_]u32{2},
         },
         .{
             .input = "屋榊屩斥%尸徯%尸庁刦彳呓昱冓惰培枏",
             .result = "今日は、Base8192🙏",
-            .errors = &[_]u64{ 4, 7 },
+            .errors = &[_]u32{ 4, 7 },
         },
     };
 
@@ -355,7 +352,7 @@ test "decode handles errors" {
         defer allocator.free(got.result);
         defer allocator.free(got.errors);
         try std.testing.expectEqualStrings(t.result, got.result);
-        try std.testing.expectEqualSlices(u64, t.errors, got.errors);
+        try std.testing.expectEqualSlices(u32, t.errors, got.errors);
     }
 }
 
