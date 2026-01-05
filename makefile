@@ -7,7 +7,16 @@ serve:
 
 publish:
 	sed "s/.\/app/https:\/\/karintomania.github.io\/Base8192\/app/" index.html > docs/index.html
-	cp app.js app.css base8192.js ./docs/
+	cp app.js app.css base8192.js base8192_wasm.js encoder.js ./docs/
 
 test:
 	node test.js
+
+benchmark:
+	node benchmark/benchmark.js
+
+build:
+	zig build
+
+gen-js:
+	zig build gen-js
