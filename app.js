@@ -1,5 +1,6 @@
-import {encode, decode, stringToUint8Array} from './base8192.js';
-import {encoded} from './encoded_wasm.js';
+import {decode, stringToUint8Array} from './base8192.js';
+import {encode_w, decode_w} from './base8192_wasm.js';
+import {encoded} from './encoder.js';
 
 const textDecoder = new TextDecoder();
 
@@ -10,38 +11,12 @@ async function decodeWasm() {
     const wasmInstance = wasm.instance;
     const wasmMemory = wasmInstance.exports.memory;
 
-    const input = 'abcde';
-
-    const encoder = new TextEncoder();
-    const inputBytes = encoder.encode(input);
-    const inputLength = inputBytes.length;
-
-    // allocate input
-    const inputPtr = wasmInstance.exports.allocate(inputLength);
-
-    const wasmMemoryView = new Uint8Array(wasmMemory.buffer);
-    wasmMemoryView.set(inputBytes, inputPtr);
-
-    const outputPtr = wasmInstance.exports.encode(inputPtr, inputLength);
-
-    const outputLength = wasmInstance.exports.getEncodedLength(inputLength);
-
-    const outputBytes = new Uint8Array(
-        wasmMemory.buffer,
-        outputPtr,
-        outputLength,
-    );
-
-    const decoder = new TextDecoder('utf-8');
-    const result = decoder.decode(outputBytes);
-    console.log(result);
-
-    wasmInstance.exports.deallocate(inputPtr, inputLength);
-    wasmInstance.exports.deallocate(outputPtr, outputLength);
+    return [wasmInstance, wasmMemory];
 }
 
 async function ready() {
-    await decodeWasm();
+    let wasmInstance, wasmMemory;
+    [wasmInstance, wasmMemory] = await decodeWasm();
 
     const encodedIn8192Text = document.querySelector('#encodedIn8192');
     const encodedIn64Text = document.querySelector('#encodedIn64');
@@ -54,11 +29,11 @@ async function ready() {
     const toEncode = document.querySelector('#toEncode');
     const toDecode = document.querySelector('#toDecode');
 
-    const encodeInput = () => {
+    const encodeInput = async () => {
         const str = toEncode.value;
         const bytes = stringToUint8Array(str);
 
-        const encodedIn8192 = encode(bytes);
+        const encodedIn8192 = await encode_w(str, wasmInstance, wasmMemory);
         const encodedIn64 = bytes.toBase64();
 
         encodedIn8192Text.innerText = encodedIn8192;
@@ -67,21 +42,22 @@ async function ready() {
         encodedIn8192Count.innerText = `= ${encodedIn8192.length} characters (${encodedIn64.length} charactes in Base64).`;
     }
 
-    const decodeInput = () => {
+    const decodeInput = async () => {
         const str = toDecode.value;
 
-        const decodedResult = decode(str);
+        const decodedResult = await decode_w(str, wasmInstance, wasmMemory);
 
-        const decoded = textDecoder.decode(new Uint8Array(decodedResult.result));
-
-        console.log(decoded);
+        console.log(decodedResult);
 
         decodeError.innerText = "";
-        decodedText.innerText = decoded;
+        decodedText.innerText = typeof decodedResult.result === 'string' ? decodedResult.result : textDecoder.decode(new Uint8Array(decodedResult.result));
 
         if (decodedResult.errors.length > 0) {
             const innerHtml = decodedResult.errors.map(
-                (msg) => `<li>${msg}</li>`
+                (idx) => {
+                    const msg = `Invalid sequence: ${str.substring(idx, idx+2)} at index ${idx}`;
+                    return `<li>${msg}</li>`;
+                }
             ).join("");
             decodeError.innerHTML = innerHtml;
         }
@@ -95,7 +71,7 @@ async function ready() {
 }
 
 if (document.readyState !== 'loading') {
-  ready()
+  ready();
 } else {
-  document.addEventListener('DOMContentLoaded', ready)
+  document.addEventListener('DOMContentLoaded', ready);
 }

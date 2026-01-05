@@ -233,26 +233,3 @@ test("decode detects error", () => {
     });
 });
 
-// test("encode & decode goes back to original", () => {
-//     const cases = [
-//         "",
-//         "1",
-//         "12",
-//         "123",
-//         "hello $base8192!!",
-//         "multibytes letters: マルチバイト文字列",
-//     ];
-
-//     cases.forEach((str) => {
-//         const bytes = stringToUint8Array(str);
-//         const encoded = encode(bytes);
-
-//         const decoded = decode(encoded);
-
-//         assertSame(bytes.length, decoded.length);
-
-//         for(let i = 0; i < bytes.length; i++) {
-//             assertSame(bytes[i].toString(16), decoded[i].toString(16));
-//         }
-//     });
-// });

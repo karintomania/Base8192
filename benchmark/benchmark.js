@@ -6,10 +6,12 @@ async function test_encode() {
     const input = fs.readFileSync('./benchmark/test.csv');
 
     const startTime = performance.now()
-    encode(input);
+    const result = encode(input);
     const endTime = performance.now()
 
     console.log("JS encoding time: " + (endTime - startTime) + "ms.");
+
+    // fs.writeFileSync("./result_js.js", result);
 }
 
 async function test_encode_wasm() {
@@ -24,10 +26,12 @@ async function test_encode_wasm() {
     const wasmMemory = wasmInstance.exports.memory;
 
     const startTime = performance.now()
-    await encode_w(input, wasmInstance, wasmMemory);
+    const result = await encode_w(input, wasmInstance, wasmMemory);
     const endTime = performance.now()
 
     console.log("WASM encoding time: " + (endTime - startTime) + "ms.");
+
+    // fs.writeFileSync("./result_wasm.js", result);
 }
 
 test_encode();

@@ -1,5 +1,3 @@
-import {encoded} from './encoded_wasm.js';
-
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');
 
@@ -17,6 +15,8 @@ export async function encode_w(input, wasmInstance, wasmMemory) {
     const result = parseWasmStringPointer(outputPtr, wasmMemory, wasmInstance);
 
     wasmInstance.exports.deallocate(inputPtr, inputLength);
+
+    return result;
 }
 
 export async function decode_w(input, wasmInstance, wasmMemory) {
@@ -31,9 +31,9 @@ export async function decode_w(input, wasmInstance, wasmMemory) {
     const outputPtr = wasmInstance.exports.decode(inputPtr, inputLength);
     const result = parseWasmStringPointer(outputPtr, wasmMemory, wasmInstance);
 
-    console.log(result);
-
     wasmInstance.exports.deallocate(inputPtr, inputLength);
+
+    return JSON.parse(result);
 }
 
 function parseWasmStringPointer(ptr, wasmMemory, wasmInstance) {
