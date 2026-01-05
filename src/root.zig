@@ -8,15 +8,15 @@ const allocator = if (builtin.cpu.arch == .wasm32)
 else
     std.heap.page_allocator;
 
-/// Allocate memory accessible from JavaScript
-/// Returns a pointer that JS can write to
+// Allocate memory accessible from JavaScript
+// Returns a pointer that JS can write to
 pub export fn allocate(size: usize) ?[*]u8 {
     const slice = allocator.alloc(u8, size) catch return null;
     return slice.ptr;
 }
 
-/// Deallocate memory previously allocated
-/// JS should call this to free memory after reading results
+// Deallocate memory previously allocated
+// JS should call this to free memory after reading results
 pub export fn deallocate(ptr: [*]u8, size: usize) void {
     const slice = ptr[0..size];
     allocator.free(slice);
@@ -92,8 +92,6 @@ test "decode" {
         .{ "吖恣", "{\"result\":\"abc\",\"errors\":[]}" },
         .{ "吖恣呀等", "{\"result\":\"abcd\",\"errors\":[]}" },
         .{ "屋榊屩斥%尸徯%尸庁刦彳呓昱冓惰培枏", "{\"result\":\"今日は、Base8192🙏\",\"errors\":[4,7]}" },
-        // .{ "abcd", "吖恣呀等" },
-        // .{ "abcde", "吖恣呆挀等" },
     };
 
     for (test_cases) |test_case| {
@@ -104,8 +102,6 @@ test "decode" {
         const output_len = std.mem.readInt(u32, result_ptr[0..4], .little);
 
         const result = result_ptr[4..output_len+4];
-        std.debug.print("output_len: {d}\n", .{output_len});
-        std.debug.print("result: {s}\n", .{result});
 
         // Verify the encoding
         try std.testing.expectEqualSlices(u8, want, result);

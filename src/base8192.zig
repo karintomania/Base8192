@@ -507,12 +507,3 @@ test "learn utf8 view" {
 
     try std.testing.expectEqual(0x6771, first);
 }
-
-// test "testUtf8Encode" {
-//     // A few taken from wikipedia a few taken elsewhere
-//     var array: [4]u8 = undefined;
-//     try std.testing.expectEqual((try unicode.utf8Encode(0x4E01, array[0..])), 3);
-
-//     std.debug.print("{s}", .{array[0..]});
-//     try std.testing.expectEqualStrings("丁", array[0..3]);
-// }

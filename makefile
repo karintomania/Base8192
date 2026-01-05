@@ -12,5 +12,11 @@ publish:
 test:
 	node test.js
 
-build-wasm:
+benchmark:
+	node benchmark/benchmark.js
+
+build:
 	zig build
+
+gen-js:
+	zig build gen-js

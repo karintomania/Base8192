@@ -11,12 +11,14 @@ pub fn build(b: *std.Build) void {
             .os_tag = .freestanding,
         }),
         .optimize = .ReleaseSmall,
+        // .optimize = .ReleaseFast, // for benchmarking
     });
 
     exe.entry = .disabled;
     exe.rdynamic = true;
 
     b.installArtifact(exe);
+    const add_install = b.addInstallArtifact(exe, .{});
 
     // Add test step
     const unit_tests = b.addTest(.{
@@ -40,4 +42,5 @@ pub fn build(b: *std.Build) void {
     const run_gen_js = b.addRunArtifact(gen_js);
     const gen_js_step = b.step("gen_js", "Generate base8192 encoded binary of the encoder in js file.");
     gen_js_step.dependOn(&run_gen_js.step);
+    gen_js_step.dependOn(&add_install.step);
 }
