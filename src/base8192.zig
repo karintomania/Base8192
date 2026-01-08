@@ -126,9 +126,7 @@ const TwelveBitsPair = struct {
     fn getFixedLengthArray(str: []const u8, allocator: Allocator) ![3]u8 {
         if (str.len != 3) return error.InvalidSliceLength;
 
-        const ary = allocator.alloc(u8, 3);
-
-        @memcpy(ary, str.ptr);
+        const ary = allocator.dupe(u8, str);
 
         return ary.*;
     }
