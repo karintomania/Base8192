@@ -17,7 +17,8 @@ build:
 	zig build
 
 gen-js: clean
-	zig build gen_js --release=small
+	zig build --release=small
+	node self-encode.js
 
 clean:
-	rm -f zig-out/bin/* encoder.js encoder.js.gz
+	rm -f zig-out/bin/* encoder.js
