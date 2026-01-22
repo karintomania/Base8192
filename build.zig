@@ -3,6 +3,8 @@ const std = @import("std");
 // mimic the command below:
 // zig build-exe root.zig -target wasm32-freestanding -fno-entry --export=add;
 pub fn build(b: *std.Build) void {
+    const optimize = b.standardOptimizeOption(.{});
+
     const exe = b.addExecutable(.{
         .name = "base8192",
         .root_source_file = b.path("src/root.zig"),
@@ -10,8 +12,7 @@ pub fn build(b: *std.Build) void {
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
         }),
-        .optimize = .ReleaseSmall,
-        // .optimize = .ReleaseFast, // for benchmarking
+        .optimize = optimize,
     });
 
     exe.entry = .disabled;
@@ -36,7 +37,7 @@ pub fn build(b: *std.Build) void {
         .name = "gen_js",
         .root_source_file = b.path("src/gen_js.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseSmall,
+        .optimize = .Debug,
     });
 
     const run_gen_js = b.addRunArtifact(gen_js);

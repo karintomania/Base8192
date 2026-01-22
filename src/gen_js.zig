@@ -6,7 +6,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const cwd = std.fs.cwd();
-    var read_buf: [16384]u8 = undefined;
+    var read_buf: [128_000]u8 = undefined;
 
     const wasm_binary = try cwd.readFile("zig-out/bin/base8192.wasm", &read_buf);
 
