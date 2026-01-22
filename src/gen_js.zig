@@ -1,6 +1,7 @@
 const std = @import("std");
 const base8192 = @import("base8192.zig");
 
+// This outputs exactly the same result as self-encode.js, but using the js version because it uses the actual encoder to encode itself. Whereas this version will create a new excutabel to encode the encoder.
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
