@@ -10,23 +10,21 @@ const baseCodePointRight: u21 = 0x5E00;
 // use 等:U+7B49 for padding.
 // 等 means equal, btw.
 const paddingCodepoint: u21 = 0x7B49;
-const paddingString = "等";
 
 const TwelveBitsType = enum {
     left,
     right,
-    padding,
 };
 
 const TwelveBits = struct {
     bits: u12,
     type: TwelveBitsType,
 
-    pub fn init(bits: u12, tbType: TwelveBitsType) TwelveBits {
-        return TwelveBits{ .bits = if (tbType == .padding) 0 else bits, .type = tbType };
+    fn init(bits: u12, tbType: TwelveBitsType) TwelveBits {
+        return TwelveBits{ .bits = bits, .type = tbType };
     }
 
-    pub fn initFromUnicodePoint(codePoint: u21, tbType: TwelveBitsType) !TwelveBits {
+    fn initFromUnicodePoint(codePoint: u21, tbType: TwelveBitsType) !TwelveBits {
         var bits: u12 = undefined;
         switch (tbType) {
             .left => {
@@ -41,10 +39,6 @@ const TwelveBits = struct {
                 }
                 bits = @truncate(codePoint - baseCodePointRight);
             },
-            .padding => {
-                if (codePoint != paddingCodepoint) return error.InvalidCodePoint;
-                bits = 0;
-            },
         }
 
         return TwelveBits{ .bits = bits, .type = tbType };
@@ -54,7 +48,6 @@ const TwelveBits = struct {
         const codepoint = switch (tb.type) {
             .left => baseCodePointLeft + tb.bits,
             .right => baseCodePointRight + tb.bits,
-            .padding => paddingCodepoint,
         };
 
         const utf8Sequence = try allocator.alloc(u8, 3);
@@ -66,10 +59,9 @@ const TwelveBits = struct {
 const TwelveBitsPair = struct {
     left: TwelveBits,
     right: ?TwelveBits,
-    padding: ?TwelveBits,
+    padding: bool,
 
-    pub fn initFromBytes(bytes: []const u8) error{InvalidSliceLength}!TwelveBitsPair {
-        // TODO: length check of bytes
+    fn initFromBytes(bytes: []const u8) error{InvalidSliceLength}!TwelveBitsPair {
         if (bytes.len < 1 or bytes.len > 3) return error.InvalidSliceLength;
 
         switch (bytes.len) {
@@ -79,7 +71,7 @@ const TwelveBitsPair = struct {
                 return TwelveBitsPair{
                     .left = TwelveBits.init(leftBits, .left),
                     .right = null,
-                    .padding = TwelveBits.init(0, .padding),
+                    .padding = true,
                 };
             },
             2 => {
@@ -89,7 +81,7 @@ const TwelveBitsPair = struct {
                 return TwelveBitsPair{
                     .left = TwelveBits.init(leftBits, .left),
                     .right = TwelveBits.init(rightBits, .right),
-                    .padding = TwelveBits.init(0, .padding),
+                    .padding = true,
                 };
             },
             3 => {
@@ -99,14 +91,18 @@ const TwelveBitsPair = struct {
                 return TwelveBitsPair{
                     .left = TwelveBits.init(leftBits, .left),
                     .right = TwelveBits.init(rightBits, .right),
-                    .padding = null,
+                    .padding = false,
                 };
             },
             else => unreachable,
         }
     }
 
-    pub fn initFromCodePoints(leftCodePoint: u21, rightCodePoint: ?u21, paddingCodePointArg: ?u21) !TwelveBitsPair {
+    fn initFromCodePoints(leftCodePoint: u21, rightCodePoint: ?u21, padding: bool) !TwelveBitsPair {
+        if (rightCodePoint == null and padding == false) {
+            // if right bits are null, padding should be true
+            return error.InvaidArugment;
+        }
         const leftTwelveBit = try TwelveBits.initFromUnicodePoint(leftCodePoint, .left);
 
         const rightTwelveBit = if (rightCodePoint != null)
@@ -114,24 +110,10 @@ const TwelveBitsPair = struct {
         else
             null;
 
-        const paddingTwelveBit =
-            if (paddingCodePointArg != null)
-                try TwelveBits.initFromUnicodePoint(paddingCodePointArg.?, .padding)
-            else
-                null;
-
-        return TwelveBitsPair{ .left = leftTwelveBit, .right = rightTwelveBit, .padding = paddingTwelveBit };
+        return TwelveBitsPair{ .left = leftTwelveBit, .right = rightTwelveBit, .padding = padding };
     }
 
-    fn getFixedLengthArray(str: []const u8, allocator: Allocator) ![3]u8 {
-        if (str.len != 3) return error.InvalidSliceLength;
-
-        const ary = allocator.dupe(u8, str);
-
-        return ary.*;
-    }
-
-    pub fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
+    fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
         var sequences = std.ArrayList([]const u8).init(allocator);
         defer sequences.deinit();
 
@@ -146,12 +128,9 @@ const TwelveBitsPair = struct {
         }
         defer if (rightSeq) |seq| allocator.free(seq);
 
-        var paddingSeq: ?[]u8 = null;
-        if (tbp.padding) |padding| {
-            paddingSeq = try padding.toUtf8Sequence(allocator);
-            try sequences.append(paddingSeq.?);
+        if (tbp.padding) {
+            try sequences.append("等");
         }
-        defer if (paddingSeq) |seq| allocator.free(seq);
 
         const result = try std.mem.concat(
             allocator,
@@ -162,28 +141,29 @@ const TwelveBitsPair = struct {
         return result;
     }
 
-    pub fn toBytes(tbp: *const TwelveBitsPair, out: *[3]u8) u8 {
+    // return original byte sequence
+    fn toOriginalBytes(tbp: *const TwelveBitsPair, out: *[3]u8) u8 {
         out[0] = @truncate(tbp.left.bits >> 4);
 
         if (tbp.right) |right| {
             out[1] = @truncate(((tbp.left.bits & 0x00F) << 4) | right.bits >> 8);
 
-            if (tbp.padding != null) {
+            if (tbp.padding) {
                 // 2 bytes
                 return 2;
             } else {
                 // 3 bytes
                 out[2] = @truncate(right.bits);
-                // 2 bytes
                 return 3;
             }
         }
 
-        if (tbp.padding != null) {
+        if (tbp.padding) {
+            // only contains left bits
             return 1;
         }
 
-        @panic("the code shouldn't reach here");
+        @panic("doesn't have padding even though the right is null");
     }
 };
 
@@ -214,7 +194,7 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
     return result.toOwnedSlice();
 }
 
-const decodeResult = struct {
+pub const decodeResult = struct {
     result: []u8,
     errors: []u32,
 };
@@ -246,15 +226,15 @@ pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
         const unhandledCodepoints = codepoints.items.len - i;
         const first: u21 = codepoints.items[i];
         var second: ?u21 = null;
-        var padding: ?u21 = null;
+        var padding: bool = false;
         var consumed: u8 = 0;
 
         if (unhandledCodepoints == 3 and hasPadding) {
             second = codepoints.items[i + 1];
-            padding = paddingCodepoint;
+            padding = true;
             consumed = 3;
         } else if (unhandledCodepoints == 2 and hasPadding) {
-            padding = paddingCodepoint;
+            padding = true;
             consumed = 2;
         } else {
             second = codepoints.items[i + 1];
@@ -268,7 +248,7 @@ pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
             continue;
         };
 
-        const n = twelveBitsPair.toBytes(&bytes);
+        const n = twelveBitsPair.toOriginalBytes(&bytes);
         try result.appendSlice(bytes[0..n]);
 
         i += @intCast(consumed);
@@ -370,7 +350,6 @@ test "TwelveBits toUtf8Sequence" {
         .{ .bits = 0, .tbType = .right, .want = "帀" },
         .{ .bits = 1, .tbType = .right, .want = "币" },
         .{ .bits = 0xFFF, .tbType = .right, .want = "淿" },
-        .{ .bits = 0, .tbType = .padding, .want = "等" },
     };
 
     for (test_cases) |test_case| {
@@ -397,7 +376,6 @@ test "TwelveBits initFromUnicodePoint" {
         .{ .letter = "帀", .tbType = .right, .want = 0 },
         .{ .letter = "币", .tbType = .right, .want = 1 },
         .{ .letter = "淿", .tbType = .right, .want = 0xFFF },
-        .{ .letter = "等", .tbType = .padding, .want = 0 },
     };
 
     for (test_cases) |test_case| {
@@ -440,15 +418,15 @@ test "TwelveBitsPair initFromEncodedStringInUtf8" {
         str: []const u8,
         wantLeft: u12,
         wantRight: ?u12,
-        wantPadding: ?u12,
+        wantPadding: bool,
     };
 
     const test_cases = [_]TestCase{
-        .{ .str = "一淿", .wantLeft = 0x000, .wantRight = 0xFFF, .wantPadding = null },
-        .{ .str = "一淿", .wantLeft = 0x000, .wantRight = 0x0FFF, .wantPadding = null },
-        .{ .str = "吖恣", .wantLeft = 0x616, .wantRight = 0x263, .wantPadding = null },
-        .{ .str = "一等", .wantLeft = 0x000, .wantRight = null, .wantPadding = 0 },
-        .{ .str = "丆开等", .wantLeft = 0x006, .wantRight = 0x100, .wantPadding = 0 },
+        .{ .str = "一淿", .wantLeft = 0x000, .wantRight = 0xFFF, .wantPadding = false },
+        .{ .str = "一淿", .wantLeft = 0x000, .wantRight = 0x0FFF, .wantPadding = false },
+        .{ .str = "吖恣", .wantLeft = 0x616, .wantRight = 0x263, .wantPadding = false },
+        .{ .str = "一等", .wantLeft = 0x000, .wantRight = null, .wantPadding = true },
+        .{ .str = "丆开等", .wantLeft = 0x006, .wantRight = 0x100, .wantPadding = true },
     };
 
     for (test_cases) |t| {
@@ -459,9 +437,9 @@ test "TwelveBitsPair initFromEncodedStringInUtf8" {
 
         const result =
             if (second == paddingCodepoint) // if the second is padding
-                try TwelveBitsPair.initFromCodePoints(first, null, second)
+                try TwelveBitsPair.initFromCodePoints(first, null, true)
             else
-                try TwelveBitsPair.initFromCodePoints(first, second, third);
+                try TwelveBitsPair.initFromCodePoints(first, second, third != null);
 
         try std.testing.expectEqual(t.wantLeft, result.left.bits);
         if (t.wantRight) |wantRight| {
@@ -488,7 +466,7 @@ test "TwelveBitsPair toByteSlice" {
         var result: [3]u8 = undefined;
         const tb = try TwelveBitsPair.initFromBytes(t.want);
 
-        const n = tb.toBytes(&result);
+        const n = tb.toOriginalBytes(&result);
 
         try std.testing.expectEqual(t.want.len, n);
 

@@ -23,7 +23,6 @@ pub export fn deallocate(ptr: [*]u8, size: usize) void {
 }
 
 pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
-
     const input = input_ptr[0..length];
     const encoded = base8192.encode(input, allocator) catch {
         return null;
@@ -39,7 +38,6 @@ pub export fn encode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
 }
 
 pub export fn decode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
-
     const input = input_ptr[0..length];
     const decode_result = base8192.decode(input, allocator) catch return null;
 
@@ -77,7 +75,7 @@ test "encode" {
         const result_ptr = encode(input.ptr, input.len).?;
         const output_len = std.mem.readInt(u32, result_ptr[0..4], .little);
 
-        const result = result_ptr[4..output_len+4];
+        const result = result_ptr[4 .. output_len + 4];
 
         // Verify the encoding
         try std.testing.expectEqualSlices(u8, want, result);
@@ -101,7 +99,7 @@ test "decode" {
         const result_ptr = decode(input.ptr, input.len).?;
         const output_len = std.mem.readInt(u32, result_ptr[0..4], .little);
 
-        const result = result_ptr[4..output_len+4];
+        const result = result_ptr[4 .. output_len + 4];
 
         // Verify the encoding
         try std.testing.expectEqualSlices(u8, want, result);

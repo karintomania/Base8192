@@ -1,6 +1,4 @@
-.PHONY: serve publish
-
-rooturl = "https:\/\/github.com"
+.PHONY: serve publish test benchmark build gen-js
 
 serve:
 	php --server localhost:8090
@@ -18,5 +16,8 @@ benchmark:
 build:
 	zig build
 
-gen-js:
-	zig build gen-js
+gen-js: clean
+	zig build gen_js --release=small
+
+clean:
+	rm -f zig-out/bin/* encoder.js encoder.js.gz

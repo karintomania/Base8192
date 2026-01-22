@@ -165,30 +165,25 @@ export class TwelveBitsPair {
     toBytes() {
         const result = Array();
 
-        const firstByte = this.left.bits >> 4;
+        // get first byte
+        result.push(this.left.bits >> 4);
 
-        // left + right pair
-        if (this.left && this.right && !this.padding) {
-            const secondByte = (this.left.bits & 0b0000_0000_1111) << 4 | (this.right.bits >> 8);
-            const thirdByte = this.right.bits & 0b0000_1111_1111;
+        if (this.right) {
+            // get second byte
+            result.push((this.left.bits & 0b0000_0000_1111) << 4 | (this.right.bits >> 8));
 
-            result.push(firstByte, secondByte, thirdByte);
+            if (this.padding) {
+                // 2 bytes
+                return result;
+            }else {
+                // 3 bytes
+                result.push(this.right.bits & 0b0000_1111_1111);
+
+                return result;
+            }
         }
 
-        // left + padding pair
-        if (this.left && !this.right && this.padding) {
-            // contains only first bytes
-            result.push(firstByte);
-        }
-
-        // left + right + padding pair
-        if (this.left && this.right && this.padding) {
-            // contains only 2 bytes
-            const secondByte = (this.left.bits & 0b0000_0000_1111) << 4 | (this.right.bits >> 8);
-
-            result.push(firstByte, secondByte);
-        }
-
+        // only contains 1 byte
         return result;
     }
 };
