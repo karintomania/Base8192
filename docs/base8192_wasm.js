@@ -1,8 +1,15 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');
 
+// input is JS string
 export async function encode_w(input, wasmInstance, wasmMemory) {
     const inputBytes = encoder.encode(input);
+
+    return encode_w_binary(inputBytes, wasmInstance, wasmMemory)
+}
+
+// take binary as input
+export async function encode_w_binary(inputBytes, wasmInstance, wasmMemory) {
     const inputLength = inputBytes.length;
 
     // allocate input
@@ -36,7 +43,7 @@ export async function decode_w(input, wasmInstance, wasmMemory) {
     return JSON.parse(result);
 }
 
-function parseWasmStringPointer(ptr, wasmMemory, wasmInstance) {
+export function parseWasmStringPointer(ptr, wasmMemory, wasmInstance) {
     // read first 4 bytes = length of the result
     const outputLen = new Uint32Array(
         wasmMemory.buffer,
