@@ -41,9 +41,12 @@ pub export fn decode(input_ptr: [*]const u8, length: usize) ?[*]u8 {
     const input = input_ptr[0..length];
     const decode_result = base8192.decode(input, allocator) catch return null;
 
-    const json_str = std.json.stringifyAlloc(allocator, decode_result, .{}) catch return null;
+    var encoded: std.Io.Writer.Allocating = .init(allocator);
+    defer encoded.deinit();
 
-    const result = createLenPrefixedStr(json_str) catch return null;
+    encoded.writer.print("{f}", .{std.json.fmt(decode_result, .{})}) catch return null;
+
+    const result = createLenPrefixedStr(encoded.written()) catch return null;
 
     allocator.free(decode_result.result);
     allocator.free(decode_result.errors);

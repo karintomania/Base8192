@@ -114,22 +114,22 @@ const TwelveBitsPair = struct {
     }
 
     fn toEncodedUtf8String(tbp: *const TwelveBitsPair, allocator: Allocator) ![]u8 {
-        var sequences = std.ArrayList([]const u8).init(allocator);
-        defer sequences.deinit();
+        var sequences = std.ArrayList([]const u8).empty;
+        defer sequences.deinit(allocator);
 
         const leftSeq = try tbp.left.toUtf8Sequence(allocator);
         defer allocator.free(leftSeq);
-        try sequences.append(leftSeq);
+        try sequences.append(allocator, leftSeq);
 
         var rightSeq: ?[]u8 = null;
         if (tbp.right) |right| {
             rightSeq = try right.toUtf8Sequence(allocator);
-            try sequences.append(rightSeq.?);
+            try sequences.append(allocator, rightSeq.?);
         }
         defer if (rightSeq) |seq| allocator.free(seq);
 
         if (tbp.padding) {
-            try sequences.append("等");
+            try sequences.append(allocator, "等");
         }
 
         const result = try std.mem.concat(
@@ -173,13 +173,13 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    var result = std.ArrayList(u8).init(allocator);
+    var result = std.ArrayList(u8).empty;
 
     while (i + 2 < input.len) {
         const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i .. i + 3]);
         const str = try twelveBitsPair.toEncodedUtf8String(arena);
 
-        try result.appendSlice(str);
+        try result.appendSlice(allocator, str);
         i += 3;
     }
 
@@ -188,10 +188,10 @@ pub fn encode(input: []const u8, allocator: Allocator) ![]u8 {
         const twelveBitsPair = try TwelveBitsPair.initFromBytes(input[i .. i + remainder]);
         const str = try twelveBitsPair.toEncodedUtf8String(arena);
 
-        try result.appendSlice(str);
+        try result.appendSlice(allocator, str);
     }
 
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 pub const decodeResult = struct {
@@ -202,22 +202,22 @@ pub const decodeResult = struct {
 pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
     var i: u32 = 0;
 
-    var result = std.ArrayList(u8).init(allocator);
-    var errors = std.ArrayList(u32).init(allocator);
+    var result = std.ArrayList(u8).empty;
+    var errors = std.ArrayList(u32).empty;
 
-    defer result.deinit();
-    defer errors.deinit();
+    defer result.deinit(allocator);
+    defer errors.deinit(allocator);
 
     var utf8View = try unicode.Utf8View.init(input);
     var it = utf8View.iterator();
 
     var bytes: [3]u8 = undefined;
 
-    var codepoints = std.ArrayList(u21).init(allocator);
-    defer codepoints.deinit();
+    var codepoints = std.ArrayList(u21).empty;
+    defer codepoints.deinit(allocator);
 
     while (it.nextCodepoint()) |codepoint| {
-        try codepoints.append(codepoint);
+        try codepoints.append(allocator, codepoint);
     }
 
     const hasPadding = codepoints.getLast() == paddingCodepoint;
@@ -243,18 +243,18 @@ pub fn decode(input: []const u8, allocator: Allocator) !decodeResult {
 
         const twelveBitsPair = TwelveBitsPair.initFromCodePoints(first, second, padding) catch {
             // record the error position
-            try errors.append(i);
+            try errors.append(allocator, i);
             i += 1;
             continue;
         };
 
         const n = twelveBitsPair.toOriginalBytes(&bytes);
-        try result.appendSlice(bytes[0..n]);
+        try result.appendSlice(allocator, bytes[0..n]);
 
         i += @intCast(consumed);
     }
 
-    return decodeResult{ .result = try result.toOwnedSlice(), .errors = try errors.toOwnedSlice() };
+    return decodeResult{ .result = try result.toOwnedSlice(allocator), .errors = try errors.toOwnedSlice(allocator) };
 }
 
 test "encode returns expected result" {

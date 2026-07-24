@@ -5,15 +5,14 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "base8192",
+    const exe = b.addExecutable(.{ .name = "base8192", .root_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
         }),
         .optimize = optimize,
-    });
+    }) });
 
     exe.entry = .disabled;
     exe.rdynamic = true;
@@ -23,8 +22,11 @@ pub fn build(b: *std.Build) void {
 
     // Add test step
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = b.graph.host,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }),
     });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
@@ -35,9 +37,11 @@ pub fn build(b: *std.Build) void {
     // add generate js step
     const gen_js = b.addExecutable(.{
         .name = "gen_js",
-        .root_source_file = b.path("src/gen_js.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
     });
 
     const run_gen_js = b.addRunArtifact(gen_js);
